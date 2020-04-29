@@ -55,7 +55,7 @@
 */
 
 use embedded_hal::blocking::i2c::{Read, Write, WriteRead};
-use embedded_hal::digital::v2::{InputPin, OutputPin};
+use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal::timer::{CountDown, Periodic};
 use nb::block;
 
@@ -93,39 +93,39 @@ where
     }
 
     fn i2c_start(&mut self) -> Result<(), crate::i2c::Error<E>> {
-        self.scl.set_high().map_err(Error::Bus)?;
-        self.sda.set_high().map_err(Error::Bus)?;
-        block!(self.clk.wait()).ok();
+        self.scl.try_set_high().map_err(Error::Bus)?;
+        self.sda.try_set_high().map_err(Error::Bus)?;
+        block!(self.clk.try_wait()).ok();
 
-        self.sda.set_low().map_err(Error::Bus)?;
-        block!(self.clk.wait()).ok();
+        self.sda.try_set_low().map_err(Error::Bus)?;
+        block!(self.clk.try_wait()).ok();
 
-        self.scl.set_low().map_err(Error::Bus)?;
-        block!(self.clk.wait()).ok();
+        self.scl.try_set_low().map_err(Error::Bus)?;
+        block!(self.clk.try_wait()).ok();
 
         Ok(())
     }
 
     fn i2c_stop(&mut self) -> Result<(), crate::i2c::Error<E>> {
-        self.scl.set_high().map_err(Error::Bus)?;
-        block!(self.clk.wait()).ok();
+        self.scl.try_set_high().map_err(Error::Bus)?;
+        block!(self.clk.try_wait()).ok();
 
-        self.sda.set_high().map_err(Error::Bus)?;
-        block!(self.clk.wait()).ok();
+        self.sda.try_set_high().map_err(Error::Bus)?;
+        block!(self.clk.try_wait()).ok();
 
         Ok(())
     }
 
     fn i2c_is_ack(&mut self) -> Result<bool, crate::i2c::Error<E>> {
-        self.sda.set_high().map_err(Error::Bus)?;
-        self.scl.set_high().map_err(Error::Bus)?;
-        block!(self.clk.wait()).ok();
+        self.sda.try_set_high().map_err(Error::Bus)?;
+        self.scl.try_set_high().map_err(Error::Bus)?;
+        block!(self.clk.try_wait()).ok();
 
-        let ack = self.sda.is_low().map_err(Error::Bus)?;
+        let ack = self.sda.try_is_low().map_err(Error::Bus)?;
 
-        self.scl.set_low().map_err(Error::Bus)?;
-        self.sda.set_low().map_err(Error::Bus)?;
-        block!(self.clk.wait()).ok();
+        self.scl.try_set_low().map_err(Error::Bus)?;
+        self.sda.try_set_low().map_err(Error::Bus)?;
+        block!(self.clk.try_wait()).ok();
 
         Ok(ack)
     }
@@ -133,32 +133,32 @@ where
     fn i2c_read_byte(&mut self, ack: bool) -> Result<u8, crate::i2c::Error<E>> {
         let mut byte: u8 = 0;
 
-        self.sda.set_high().map_err(Error::Bus)?;
+        self.sda.try_set_high().map_err(Error::Bus)?;
 
         for i in 0..8 {
-            self.scl.set_high().map_err(Error::Bus)?;
-            block!(self.clk.wait()).ok();
+            self.scl.try_set_high().map_err(Error::Bus)?;
+            block!(self.clk.try_wait()).ok();
 
-            if self.sda.is_high().map_err(Error::Bus)? {
+            if self.sda.try_is_high().map_err(Error::Bus)? {
                 byte |= 1 << (7 - i);
             }
 
-            self.scl.set_low().map_err(Error::Bus)?;
-            block!(self.clk.wait()).ok();
+            self.scl.try_set_low().map_err(Error::Bus)?;
+            block!(self.clk.try_wait()).ok();
         }
 
         if ack {
-            self.sda.set_low().map_err(Error::Bus)?;
+            self.sda.try_set_low().map_err(Error::Bus)?;
         } else {
-            self.sda.set_high().map_err(Error::Bus)?;
+            self.sda.try_set_high().map_err(Error::Bus)?;
         }
 
-        self.scl.set_high().map_err(Error::Bus)?;
-        block!(self.clk.wait()).ok();
+        self.scl.try_set_high().map_err(Error::Bus)?;
+        block!(self.clk.try_wait()).ok();
 
-        self.scl.set_low().map_err(Error::Bus)?;
-        self.sda.set_low().map_err(Error::Bus)?;
-        block!(self.clk.wait()).ok();
+        self.scl.try_set_low().map_err(Error::Bus)?;
+        self.sda.try_set_low().map_err(Error::Bus)?;
+        block!(self.clk.try_wait()).ok();
 
         Ok(byte)
     }
@@ -168,17 +168,17 @@ where
             let val = (byte >> (7 - bit)) & 0b1;
 
             if val == 1 {
-                self.sda.set_high().map_err(Error::Bus)?;
+                self.sda.try_set_high().map_err(Error::Bus)?;
             } else {
-                self.sda.set_low().map_err(Error::Bus)?;
+                self.sda.try_set_low().map_err(Error::Bus)?;
             }
 
-            self.scl.set_high().map_err(Error::Bus)?;
-            block!(self.clk.wait()).ok();
+            self.scl.try_set_high().map_err(Error::Bus)?;
+            block!(self.clk.try_wait()).ok();
 
-            self.scl.set_low().map_err(Error::Bus)?;
-            self.sda.set_low().map_err(Error::Bus)?;
-            block!(self.clk.wait()).ok();
+            self.scl.try_set_low().map_err(Error::Bus)?;
+            self.sda.try_set_low().map_err(Error::Bus)?;
+            block!(self.clk.try_wait()).ok();
         }
 
         Ok(())
@@ -193,7 +193,7 @@ where
 {
     type Error = crate::i2c::Error<E>;
 
-    fn write(&mut self, addr: u8, output: &[u8]) -> Result<(), Self::Error> {
+    fn try_write(&mut self, addr: u8, output: &[u8]) -> Result<(), Self::Error> {
         if output.is_empty() {
             return Ok(());
         }
@@ -231,7 +231,7 @@ where
 {
     type Error = crate::i2c::Error<E>;
 
-    fn read(&mut self, addr: u8, input: &mut [u8]) -> Result<(), Self::Error> {
+    fn try_read(&mut self, addr: u8, input: &mut [u8]) -> Result<(), Self::Error> {
         if input.is_empty() {
             return Ok(());
         }
@@ -265,7 +265,12 @@ where
 {
     type Error = crate::i2c::Error<E>;
 
-    fn write_read(&mut self, addr: u8, output: &[u8], input: &mut [u8]) -> Result<(), Self::Error> {
+    fn try_write_read(
+        &mut self,
+        addr: u8,
+        output: &[u8],
+        input: &mut [u8],
+    ) -> Result<(), Self::Error> {
         if output.is_empty() || input.is_empty() {
             return Err(Error::InvalidData);
         }

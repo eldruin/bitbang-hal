@@ -14,8 +14,10 @@ categories = ["embedded", "no-std"]
 nb = "~0.1"
 
 [dependencies.embedded-hal]
-version = "~0.2"
-features = ["unproven"]
+git = "https://github.com/eldruin/embedded-hal"
+branch = "i2s"
+#version = "~0.2"
+#features = ["unproven"]
 
 [dev-dependencies.metro_m4]
 version = "~0.1"
