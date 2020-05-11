@@ -52,6 +52,8 @@ macro_rules! impl_i2s_write {
                 left_words: &'w [$word_ty],
                 right_words: &'w [$word_ty],
             ) -> Result<(), Self::Error> {
+                let mut left = OutBitStream::new(left_words.iter());
+                let mut right = OutBitStream::new(right_words.iter());
                 match self.mode {
                     Mode::I2s => {
                         self.set_ws_low()?;
@@ -128,18 +130,18 @@ where
 }
 
 #[derive(Debug)]
-struct OutBitStream<'w, WI, WU> {
-    data: &'w [WI],
+struct OutBitStream<WI, WU> {
+    data: WI,
     word_offset: usize,
     current_word: WU,
     bit_offset: usize,
 }
 
-impl<'w, WI, WU> OutBitStream<'w, WI, WU>
+impl<WI, WU> OutBitStream<WI, WU>
 where
     WU: From<u8>,
 {
-    fn new(data: &'w [WI]) -> Self {
+    fn new(data: WI) -> Self {
         OutBitStream {
             data,
             word_offset: 0,
@@ -151,24 +153,26 @@ where
 
 macro_rules! impl_iterator_obs {
     ($wi:ty, $wu:ty, $word_bit_count:expr) => {
-        impl<'w> Iterator for OutBitStream<'w, $wi, $wu> {
+        impl<'a, WI> Iterator for OutBitStream<WI, $wu>
+        where
+            WI: Iterator<Item = &'a $wi>,
+        {
             type Item = bool;
 
+            #[inline]
             fn next(&mut self) -> Option<Self::Item> {
                 if self.bit_offset == $word_bit_count {
-                    self.word_offset += 1;
                     self.bit_offset = 0;
                 }
-                if self.data.len() <= self.word_offset {
-                    None
-                } else {
-                    if self.bit_offset == 0 {
-                        self.current_word = self.data[self.word_offset] as $wu;
+                if self.bit_offset == 0 {
+                    match self.data.next() {
+                        Some(value) => self.current_word = *value as $wu,
+                        None => return None,
                     }
-                    self.bit_offset += 1;
-                    // MSB first
-                    Some(((self.current_word >> ($word_bit_count - self.bit_offset)) & 1) != 0)
                 }
+                self.bit_offset += 1;
+                // MSB first
+                Some(((self.current_word >> ($word_bit_count - self.bit_offset)) & 1) != 0)
             }
         }
     };
@@ -180,16 +184,17 @@ impl_iterator_obs!(i32, u32, 32);
 
 #[cfg(test)]
 mod tests {
+    // Can be run with `cargo test --target=x86_64-unknown-linux-gnu --lib`
     use super::*;
 
     #[test]
     fn can_stream_empty() {
-        let mut obs: OutBitStream<u8> = OutBitStream::new(&[]);
+        let mut obs: OutBitStream<core::slice::Iter<i8>, u8> = OutBitStream::new([].iter());
         assert_eq!(obs.next(), None);
     }
     #[test]
     fn can_stream_u8() {
-        let mut obs = OutBitStream::new(&[0xAB_u8, 0xCD]);
+        let mut obs = OutBitStream::new([0xAB_u8 as i8, 0xCD_u8 as i8].iter());
         for i in 0..8 {
             assert_eq!(obs.next(), Some((0xAB & (1 << (7 - i))) != 0));
         }
@@ -202,7 +207,7 @@ mod tests {
 
     #[test]
     fn can_stream_u16() {
-        let mut obs = OutBitStream::new(&[0xABCD_u16, 0xEF01]);
+        let mut obs = OutBitStream::new([0xABCD_u16 as i16, 0xEF01_u16 as i16].iter());
         for i in 0..16 {
             assert_eq!(obs.next(), Some((0xABCD & (1 << (15 - i))) != 0));
         }
@@ -215,7 +220,7 @@ mod tests {
 
     #[test]
     fn can_stream_u32() {
-        let mut obs = OutBitStream::new(&[0xABCD_EF01_u32, 0x2345_6789]);
+        let mut obs = OutBitStream::new([0xABCD_EF01_u32 as i32, 0x2345_6789_u32 as i32].iter());
         for i in 0..32 {
             assert_eq!(obs.next(), Some((0xABCD_EF01_u32 & (1 << (31 - i))) != 0));
         }
