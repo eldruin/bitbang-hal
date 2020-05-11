@@ -10,7 +10,14 @@ pub enum Error<EP> {
     Pin(EP),
 }
 
+#[derive(Debug)]
+pub enum Mode {
+    I2s,
+    LeftJustified,
+}
+
 pub struct I2s<SCK, WS, SD, TIMER> {
+    mode: Mode,
     sck: SCK,
     ws: WS,
     sd: SD,
@@ -18,8 +25,14 @@ pub struct I2s<SCK, WS, SD, TIMER> {
 }
 
 impl<SCK, WS, SD, TIMER> I2s<SCK, WS, SD, TIMER> {
-    pub fn new(sd: SD, ws: WS, sck: SCK, timer: TIMER) -> Self {
-        I2s { sck, ws, sd, timer }
+    pub fn new(mode: Mode, sd: SD, ws: WS, sck: SCK, timer: TIMER) -> Self {
+        I2s {
+            mode,
+            sck,
+            ws,
+            sd,
+            timer,
+        }
     }
 }
 
@@ -39,26 +52,42 @@ macro_rules! impl_i2s_write {
                 left_words: &'w [$word_ty],
                 right_words: &'w [$word_ty],
             ) -> Result<(), Self::Error> {
-                let mut left = OutBitStream::new(left_words);
-                let mut right = OutBitStream::new(right_words);
-                self.set_ws_low()?;
-                // The very first time this will be missing one bit if WS was set to high.
-                // However, we cannot know about the previous call or the previous pin status.
-                loop {
-                    for _ in 0..($bit_count - 1) {
-                        match left.next() {
-                            None => return Ok(()),
-                            Some(bit) => self.try_write_bit(bit)?,
+                match self.mode {
+                    Mode::I2s => {
+                        self.set_ws_low()?;
+                        // The very first time this will be missing one bit if WS was set to high.
+                        // However, we cannot know about the previous call or the previous pin status.
+                        loop {
+                            for _ in 0..($bit_count - 1) {
+                                match left.next() {
+                                    None => return Ok(()),
+                                    Some(bit) => self.try_write_bit(bit)?,
+                                }
+                            }
+                            self.set_ws_high()?;
+                            self.try_write_bit(left.next().unwrap_or(false))?; // last left bit
+
+                            for _ in 0..($bit_count - 1) {
+                                self.try_write_bit(right.next().unwrap_or(false))?;
+                            }
+                            self.set_ws_low()?;
+                            self.try_write_bit(right.next().unwrap_or(false))?; // last right bit
                         }
                     }
-                    self.set_ws_high()?;
-                    self.try_write_bit(left.next().unwrap_or(false))?; // last left bit
+                    Mode::LeftJustified => loop {
+                        self.set_ws_low()?;
+                        for _ in 0..$bit_count {
+                            match left.next() {
+                                None => return Ok(()),
+                                Some(bit) => self.try_write_bit(bit)?,
+                            }
+                        }
 
-                    for _ in 0..($bit_count - 1) {
-                        self.try_write_bit(right.next().unwrap_or(false))?;
-                    }
-                    self.set_ws_low()?;
-                    self.try_write_bit(right.next().unwrap_or(false))?; // last right bit
+                        self.set_ws_high()?;
+                        for _ in 0..$bit_count {
+                            self.try_write_bit(right.next().unwrap_or(false))?;
+                        }
+                    },
                 }
             }
         }
