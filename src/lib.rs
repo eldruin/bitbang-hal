@@ -11,5 +11,6 @@
 #![deny(missing_docs)]
 
 pub mod i2c;
+pub mod i2s;
 pub mod serial;
 pub mod spi;
