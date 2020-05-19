@@ -182,12 +182,18 @@ where
         self.wait_clk();
         self.sck.set_low().map_err(Error::Pin)
     }
+
+    #[inline]
     fn wait_clk(&mut self) {
         block!(self.timer.wait()).unwrap()
     }
+
+    #[inline]
     fn set_ws_high(&mut self) -> Result<(), Error<EP>> {
         self.ws.set_high().map_err(Error::Pin)
     }
+
+    #[inline]
     fn set_ws_low(&mut self) -> Result<(), Error<EP>> {
         self.ws.set_low().map_err(Error::Pin)
     }
