@@ -80,6 +80,31 @@ macro_rules! impl_i2s_write {
                 Ok(())
             }
         }
+
+        impl<SCK, WS, SD, TIMER, EP> i2s::WriteIter<$word_ty> for I2s<SCK, WS, SD, TIMER>
+        where
+            SCK: OutputPin<Error = EP>,
+            WS: OutputPin<Error = EP>,
+            SD: OutputPin<Error = EP>,
+            TIMER: CountDown + Periodic,
+        {
+            type Error = Error<EP>;
+
+            fn try_write<LW, RW>(
+                &mut self,
+                left_words: LW,
+                right_words: RW,
+            ) -> Result<(), Self::Error>
+            where
+                LW: IntoIterator<Item = $word_ty>,
+                RW: IntoIterator<Item = $word_ty>,
+            {
+                for (left_word, right_word) in left_words.into_iter().zip(right_words.into_iter()) {
+                    self.try_write_words(left_word as $raw_ty, right_word as $raw_ty, $bit_count)?;
+                }
+                Ok(())
+            }
+        }
     };
 }
 impl_i2s_write!(i8, u8, 8);
