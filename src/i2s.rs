@@ -1,21 +1,38 @@
-//! I2S - Inter-IC Sound
+//! Inter-IC Sound
+//!
+//! This implementation consumes the following hardware resources:
+//! - Periodic timer to mark clock cycles
+//! - Output GPIO pin for clock signal (BCLK)
+//! - Output GPIO pin for data transmission (SD)
+//! - Output GPIO pin for word (channel) selection (WS)
+//!
+//! The timer must be configured to twice the desired communication frequency.
+//!
+//! Both standard I2S and left-justified modes are supported.
+//!
 
 use embedded_hal::blocking::i2s;
 use embedded_hal::digital::v2::OutputPin;
 use embedded_hal::timer::{CountDown, Periodic};
 use nb::block;
 
+/// I2S errors
 #[derive(Debug)]
 pub enum Error<EP> {
+    /// GPIO error
     Pin(EP),
 }
 
+/// I2S mode
 #[derive(Debug)]
 pub enum Mode {
+    /// Standard I2S
     I2s,
+    /// Left-justified
     LeftJustified,
 }
 
+/// Bit banging I2S device
 pub struct I2s<SCK, WS, SD, TIMER> {
     mode: Mode,
     sck: SCK,
@@ -25,6 +42,7 @@ pub struct I2s<SCK, WS, SD, TIMER> {
 }
 
 impl<SCK, WS, SD, TIMER> I2s<SCK, WS, SD, TIMER> {
+    /// Create new instance
     pub fn new(mode: Mode, sd: SD, ws: WS, sck: SCK, timer: TIMER) -> Self {
         I2s {
             mode,
