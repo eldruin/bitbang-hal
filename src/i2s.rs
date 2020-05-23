@@ -109,7 +109,6 @@ macro_rules! impl_i2s_write {
         }
     };
 }
-impl_i2s_write!(i8, u8, 8);
 impl_i2s_write!(i16, u16, 16);
 impl_i2s_write!(i32, u32, 32);
 
@@ -233,15 +232,6 @@ where
 mod tests {
     // Can be run with `cargo test --target=x86_64-unknown-linux-gnu --lib`
     use super::*;
-
-    #[test]
-    fn can_stream_u8() {
-        let mut obs = OutBitStream::new(0xAB_u8, 8);
-        for i in 0..8 {
-            assert_eq!(obs.next(), Some((0xAB & (1 << (7 - i))) != 0));
-        }
-        assert_eq!(obs.next(), None);
-    }
 
     #[test]
     fn can_stream_u16() {
