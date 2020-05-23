@@ -91,7 +91,7 @@ macro_rules! impl_i2s_write {
         {
             type Error = Error<EP>;
 
-            fn try_write<LW, RW>(
+            fn try_write_iter<LW, RW>(
                 &mut self,
                 left_words: LW,
                 right_words: RW,
