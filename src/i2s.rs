@@ -70,6 +70,7 @@ macro_rules! impl_i2s_write {
                 left_words: &'w [$word_ty],
                 right_words: &'w [$word_ty],
             ) -> Result<(), Self::Error> {
+                self.set_ws_low()?;
                 for (left_word, right_word) in left_words.iter().zip(right_words.iter()) {
                     self.try_write_words(
                         *left_word as $raw_ty,
@@ -99,6 +100,7 @@ macro_rules! impl_i2s_write {
                 LW: IntoIterator<Item = $word_ty>,
                 RW: IntoIterator<Item = $word_ty>,
             {
+                self.set_ws_low()?;
                 for (left_word, right_word) in left_words.into_iter().zip(right_words.into_iter()) {
                     self.try_write_words(left_word as $raw_ty, right_word as $raw_ty, $bit_count)?;
                 }
@@ -135,14 +137,10 @@ where
         let mut right = OutBitStream::new(right_word, bit_count);
         match self.mode {
             Mode::I2s => {
-                self.set_ws_low()?;
                 // The very first time this will be missing one bit if WS was set to high.
                 // However, we cannot know about the previous call or the previous pin status.
                 for _ in 0..(bit_count - 1) {
-                    match left.next() {
-                        None => return Ok(()),
-                        Some(bit) => self.try_write_bit(bit)?,
-                    }
+                    self.try_write_bit(left.next().unwrap_or(false))?;
                 }
                 self.set_ws_high()?;
                 self.try_write_bit(left.next().unwrap_or(false))?; // last left bit
@@ -156,10 +154,7 @@ where
             Mode::LeftJustified => {
                 self.set_ws_low()?;
                 for _ in 0..bit_count {
-                    match left.next() {
-                        None => return Ok(()),
-                        Some(bit) => self.try_write_bit(bit)?,
-                    }
+                    self.try_write_bit(left.next().unwrap_or(false))?;
                 }
 
                 self.set_ws_high()?;
