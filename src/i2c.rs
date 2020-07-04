@@ -50,6 +50,7 @@
   ```
 */
 
+use embedded_hal::blocking::i2c::{Read, Write, WriteRead, SevenBitAddress, TenBitAddress};
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal::timer::{CountDown, Periodic};
 use nb::block;
@@ -231,9 +232,19 @@ where
             Ok(())
         }
     }
+
+    #[inline]
+    fn send_10bit_address(&mut self, addr: u16, rw: u8) -> Result<(), crate::i2c::Error<E>> {
+        // 10-bit special address + highest two bits of address
+        self.i2c_write_byte(0xF0 | (addr >> 8) as u8 | rw)?;
+        self.check_ack()?;
+        // lowest 8 bits of address
+        self.i2c_write_byte(addr as u8)?;
+        self.check_ack()
+    }
 }
 
-impl<SCL, SDA, CLK, E> Write for I2cBB<SCL, SDA, CLK>
+impl<SCL, SDA, CLK, E> Write<SevenBitAddress> for I2cBB<SCL, SDA, CLK>
 where
     SCL: OutputPin<Error = E>,
     SDA: OutputPin<Error = E> + InputPin<Error = E>,
@@ -260,7 +271,34 @@ where
     }
 }
 
-impl<SCL, SDA, CLK, E> Read for I2cBB<SCL, SDA, CLK>
+impl<SCL, SDA, CLK, E> Write<TenBitAddress> for I2cBB<SCL, SDA, CLK>
+where
+    SCL: OutputPin<Error = E>,
+    SDA: OutputPin<Error = E> + InputPin<Error = E>,
+    CLK: CountDown + Periodic,
+{
+    type Error = crate::i2c::Error<E>;
+
+    fn try_write(&mut self, addr: u16, output: &[u8]) -> Result<(), Self::Error> {
+        if output.is_empty() {
+            return Ok(());
+        }
+
+        // ST
+        self.i2c_start()?;
+
+        // SAD + W
+        self.send_10bit_address(addr, 0)?;
+
+        self.write_to_slave(output)?;
+
+        // SP
+        self.i2c_stop()
+    }
+}
+
+
+impl<SCL, SDA, CLK, E> Read<SevenBitAddress> for I2cBB<SCL, SDA, CLK>
 where
     SCL: OutputPin<Error = E>,
     SDA: OutputPin<Error = E> + InputPin<Error = E>,
@@ -287,7 +325,34 @@ where
     }
 }
 
-impl<SCL, SDA, CLK, E> WriteRead for I2cBB<SCL, SDA, CLK>
+impl<SCL, SDA, CLK, E> Read<TenBitAddress> for I2cBB<SCL, SDA, CLK>
+where
+    SCL: OutputPin<Error = E>,
+    SDA: OutputPin<Error = E> + InputPin<Error = E>,
+    CLK: CountDown + Periodic,
+{
+    type Error = crate::i2c::Error<E>;
+
+    fn try_read(&mut self, addr: u16, input: &mut [u8]) -> Result<(), Self::Error> {
+        if input.is_empty() {
+            return Ok(());
+        }
+
+        // ST
+        self.i2c_start()?;
+
+        // SAD + R
+        self.send_10bit_address(addr, 0x1)?;
+
+        self.read_from_slave(input)?;
+
+        // SP
+        self.i2c_stop()
+    }
+}
+
+
+impl<SCL, SDA, CLK, E> WriteRead<SevenBitAddress> for I2cBB<SCL, SDA, CLK>
 where
     SCL: OutputPin<Error = E>,
     SDA: OutputPin<Error = E> + InputPin<Error = E>,
@@ -315,6 +380,40 @@ where
         // SAD + R
         self.i2c_write_byte((addr << 1) | 0x1)?;
         self.check_ack()?;
+
+        self.read_from_slave(input)?;
+
+        // SP
+        self.i2c_stop()
+    }
+}
+
+impl<SCL, SDA, CLK, E> WriteRead<TenBitAddress> for I2cBB<SCL, SDA, CLK>
+where
+    SCL: OutputPin<Error = E>,
+    SDA: OutputPin<Error = E> + InputPin<Error = E>,
+    CLK: CountDown + Periodic,
+{
+    type Error = crate::i2c::Error<E>;
+
+    fn try_write_read(&mut self, addr: u16, output: &[u8], input: &mut [u8]) -> Result<(), Self::Error> {
+        if output.is_empty() || input.is_empty() {
+            return Err(Error::InvalidData);
+        }
+
+        // ST
+        self.i2c_start()?;
+
+        // SAD + W
+        self.send_10bit_address(addr, 0x0)?;
+
+        self.write_to_slave(output)?;
+
+        // SR
+        self.i2c_start()?;
+
+        // SAD + R
+        self.send_10bit_address(addr, 0x1)?;
 
         self.read_from_slave(input)?;
 

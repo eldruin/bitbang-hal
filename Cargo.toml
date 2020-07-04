@@ -26,3 +26,6 @@ cortex-m-rt = "0.6.12"
 panic-halt = "0.2.0"
 eeprom24x = "0.3.0"
 lm75 = "0.1"
+
+[patch.crates-io]
+embedded-hal = { git="https://github.com/eldruin/embedded-hal", branch="i2c-multi-address-mode" }
